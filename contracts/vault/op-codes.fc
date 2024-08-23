@@ -1,0 +1,25 @@
+const op::transfer = 0xf8a7ea5;
+const op::transfer_notification = 0x7362d09c;
+
+const op::request_withdrawal = 0x25d4fcff;
+const op::refuse_withdrawal = 0xe659c222;
+const op::withdraw = 0xb5de5f9e;
+const op::set_vault_jetton_wallet = 0xed105058;
+
+const op::init_code_upgrade = 0xdf1e233d;
+const op::init_admin_upgrade = 0x2fb94384;
+const op::init_keeper_upgrade = 0x8349e5be;
+const op::cancel_code_upgrade = 0x357ccc67;
+const op::cancel_admin_upgrade = 0xa4ed9981;
+const op::cancel_keeper_upgrade = 0xf3a845eb;
+const op::finalize_upgrades = 0x6378509f;
+
+
+const error::wrong_op = 0xffff;
+const error::not_keeper = 80;
+const error::not_admin = 81;
+const error:zero_withdrawal = 82;
+const error::insufficient_gas = 83;
+const error:sender_not_user = 84;
+const error:invalid_call = 85;
+const error::wrong_workchain = 333;

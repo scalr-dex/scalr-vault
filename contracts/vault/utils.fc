@@ -1,0 +1,66 @@
+#include "../imports/stdlib.fc";
+#include "storage.fc";
+#include "op-codes.fc";
+
+const BASECHAIN = 0;
+const WORKCHAIN = BASECHAIN;
+
+const HOLE_ADDRESS = "EQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM9c"a;
+const TWODAYS = 172800; ;; 24 * 60 * 60 * 2
+const SEVENDAYS = 604800; ;; 24 * 60 * 60 * 7
+
+const TRANSFER_FWD_FEE = 30000000;
+
+(cell) empty_cell() asm "<b b> PUSHREF";
+
+(int) get_workchain(slice address) inline {
+  (int wc, _) = parse_std_addr(address);
+  return wc;
+}
+
+() force_chain(int workchain, slice address) impure inline {
+  (int wc) = get_workchain(address);
+  throw_unless(error::wrong_workchain, wc == workchain);
+}
+
+(slice, slice, slice, cell) get_vault_data() method_id {
+    load_storage();
+    return (
+      storage::vault_jetton_wallet,
+      storage::admin_address, 
+      storage::keeper_address, 
+      storage::temp_upgrade
+    );
+}
+
+(builder) create_simple_transfer_body(int query_id, int fwd_amount, int jetton_amount, slice to) inline {
+    return begin_cell()
+        .store_uint(op::transfer, 32)
+        .store_uint(query_id, 64)
+        .store_coins(jetton_amount)
+        .store_slice(to)
+        .store_slice(to)
+        .store_uint(0, 1)
+        .store_coins(fwd_amount) ;; forward_ton_amount
+        .store_uint(0, 1);
+}
+
+(cell) pack_temp_upgrade(int end_code, cell code, int end_admin, slice admin, int end_keeper, slice keeper) inline {
+    cell data = begin_cell()
+        .store_uint(end_code, 64)
+        .store_uint(end_admin, 64)
+        .store_uint(end_keeper, 64)
+        .store_slice(admin)
+        .store_slice(keeper)
+        .store_ref(code)
+    .end_cell();
+    return data;
+}
+
+(int, cell, int, slice, int, slice) unpack_temp_upgrade(cell c_data) inline {
+    slice s_data = c_data.begin_parse();
+    (int end_code, int end_admin, int end_keeper, slice admin, slice keeper, cell code) = (
+      s_data~load_uint(64), s_data~load_uint(64), s_data~load_uint(64), 
+      s_data~load_msg_addr(), s_data~load_msg_addr(), s_data~load_ref());
+    return (end_code, code, end_admin, admin, end_keeper, keeper);
+}

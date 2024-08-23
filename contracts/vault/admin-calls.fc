@@ -1,0 +1,89 @@
+#include "utils.fc";
+
+() handle_admin_messages(int op, int query_id, int my_balance, int msg_value, slice in_msg_body) impure inline {
+    if (op == op::set_vault_jetton_wallet) {
+        ;; Set jetton wallet address for vault
+        storage::vault_jetton_wallet = in_msg_body~load_msg_addr();
+        save_storage();
+        send_empty_message(0, storage::admin_address, CARRY_REMAINING_GAS);
+        return ();
+    }
+
+    if (op == op::init_code_upgrade) { 
+        (int end_code, _, int end_admin, slice admin, int end_keeper, slice keeper) = unpack_temp_upgrade(storage::temp_upgrade);
+        throw_unless(error:invalid_call, end_code == 0); ;; upgrade already in progress
+        storage::temp_upgrade = pack_temp_upgrade(now() + SEVENDAYS,  in_msg_body~load_ref(), end_admin, admin, end_keeper, keeper);
+        save_storage();
+        return ();
+    }
+
+    if (op == op::init_admin_upgrade) { 
+        (int end_code, cell new_code, int end_admin, _, int end_keeper, slice keeper) = unpack_temp_upgrade(storage::temp_upgrade);
+        throw_unless(error:invalid_call, end_admin == 0); ;; upgrade already in progress
+        storage::temp_upgrade = pack_temp_upgrade(end_code, new_code, now() + TWODAYS, in_msg_body~load_msg_addr(), end_keeper, keeper);
+        save_storage();
+        return ();
+    }
+
+    if (op == op::init_keeper_upgrade) { 
+        (int end_code, cell new_code, int end_admin, slice admin, int end_keeper, _) = unpack_temp_upgrade(storage::temp_upgrade);
+        throw_unless(error:invalid_call, end_keeper == 0); ;; upgrade already in progress
+        storage::temp_upgrade = pack_temp_upgrade(end_code, new_code, end_admin, admin, now() + TWODAYS, in_msg_body~load_msg_addr());
+        save_storage();
+        return ();
+    }
+
+    if (op == op::cancel_admin_upgrade) { 
+        (int end_code, cell code, int end_admin, _, int end_keeper, slice keeper) = unpack_temp_upgrade(storage::temp_upgrade);
+        throw_unless(error:invalid_call, end_admin > 0); 
+        storage::temp_upgrade = pack_temp_upgrade(end_code, code, 0, HOLE_ADDRESS, end_keeper, keeper);
+        save_storage();
+        return ();
+    }
+
+    if (op == op::cancel_code_upgrade) { 
+        (int end_code, _, int end_admin, slice admin, int end_keeper, slice keeper) = unpack_temp_upgrade(storage::temp_upgrade);
+        throw_unless(error:invalid_call, end_code > 0); 
+        storage::temp_upgrade = pack_temp_upgrade(0, empty_cell(), end_admin, admin, end_keeper, keeper);
+        save_storage();
+        return ();
+    }
+
+    if (op == op::cancel_keeper_upgrade) { 
+        (int end_code, cell code, int end_admin, slice admin, int end_keeper, _) = unpack_temp_upgrade(storage::temp_upgrade);
+        throw_unless(error:invalid_call, end_keeper > 0); 
+        storage::temp_upgrade = pack_temp_upgrade(end_code, code, end_admin, admin, 0, HOLE_ADDRESS);
+        save_storage();
+        return ();
+    }
+
+    ;; valid for all upgrades
+    if (op == op::finalize_upgrades) { 
+        (int end_code, cell new_code, int end_admin, slice new_admin, int end_keeper, slice new_keeper) = unpack_temp_upgrade(storage::temp_upgrade);
+        throw_unless(error:invalid_call, (end_code + end_admin + end_keeper) > 0); ;; make sure at least one upgrade process is in progress
+
+        if ((end_code > 0) & (now() >= end_code)) {
+            set_code(new_code);
+            end_code = 0;
+            new_code = empty_cell();
+        }
+
+        if ((end_admin > 0) & (now() >= end_admin)) {
+            storage::admin_address = new_admin;
+            end_admin = 0;
+            new_admin = HOLE_ADDRESS;
+        }
+
+        if ((end_keeper > 0) & (now() >= end_keeper)) {
+            storage::keeper_address = new_keeper;
+            end_keeper = 0;
+            new_keeper = HOLE_ADDRESS;
+        }
+
+        storage::temp_upgrade = pack_temp_upgrade(end_code, new_code, end_admin, new_admin, end_keeper, new_keeper);
+        save_storage();
+        return ();
+    }
+
+    throw(error::wrong_op);
+}
